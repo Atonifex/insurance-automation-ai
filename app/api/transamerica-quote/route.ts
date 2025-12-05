@@ -167,89 +167,110 @@ interface CUAResponse {
 }
 
 /**
- * Execute a computer action in Playwright
+ * Execute a computer action in Playwright with human-like behavior
  */
 async function executeAction(page: import('playwright').Page, action: ComputerAction): Promise<void> {
   console.log(`[CUA] Executing action: ${action.type}`, action);
   
-  switch (action.type) {
-    case 'click': {
-      const { x = 0, y = 0, button = 'left' } = action;
-      await page.mouse.click(x, y, { button });
-      break;
-    }
-    
-    case 'double_click': {
-      const { x = 0, y = 0 } = action;
-      await page.mouse.dblclick(x, y);
-      break;
-    }
-    
-    case 'scroll': {
-      const { x = 0, y = 0, scrollX = 0, scrollY = 0 } = action;
-      await page.mouse.move(x, y);
-      await page.evaluate(`window.scrollBy(${scrollX}, ${scrollY})`);
-      break;
-    }
-    
-    case 'keypress': {
-      const { keys = [] } = action;
-      for (const key of keys) {
-        // Map common key names
-        const keyMap: Record<string, string> = {
-          'ENTER': 'Enter',
-          'RETURN': 'Enter',
-          'TAB': 'Tab',
-          'SPACE': ' ',
-          'BACKSPACE': 'Backspace',
-          'DELETE': 'Delete',
-          'ESCAPE': 'Escape',
-          'ARROWUP': 'ArrowUp',
-          'ARROWDOWN': 'ArrowDown',
-          'ARROWLEFT': 'ArrowLeft',
-          'ARROWRIGHT': 'ArrowRight',
-          'CTRL': 'Control',
-          'ALT': 'Alt',
-          'SHIFT': 'Shift',
-          'META': 'Meta',
-        };
-        const mappedKey = keyMap[key.toUpperCase()] || key;
-        await page.keyboard.press(mappedKey);
+  try {
+    switch (action.type) {
+      case 'click': {
+        const { x = 0, y = 0, button = 'left' } = action;
+        // Move mouse first (more human-like)
+        await page.mouse.move(x, y, { steps: 5 });
+        await page.waitForTimeout(100 + Math.random() * 100); // Random delay
+        await page.mouse.click(x, y, { button, delay: 50 + Math.random() * 50 });
+        break;
       }
-      break;
+      
+      case 'double_click': {
+        const { x = 0, y = 0 } = action;
+        await page.mouse.move(x, y, { steps: 5 });
+        await page.waitForTimeout(100);
+        await page.mouse.dblclick(x, y);
+        break;
+      }
+      
+      case 'scroll': {
+        const { x = 0, y = 0, scrollX = 0, scrollY = 0 } = action;
+        await page.mouse.move(x, y);
+        await page.evaluate(`window.scrollBy(${scrollX}, ${scrollY})`);
+        break;
+      }
+      
+      case 'keypress': {
+        const { keys = [] } = action;
+        for (const key of keys) {
+          // Map common key names
+          const keyMap: Record<string, string> = {
+            'ENTER': 'Enter',
+            'RETURN': 'Enter',
+            'TAB': 'Tab',
+            'SPACE': ' ',
+            'BACKSPACE': 'Backspace',
+            'DELETE': 'Delete',
+            'ESCAPE': 'Escape',
+            'ARROWUP': 'ArrowUp',
+            'ARROWDOWN': 'ArrowDown',
+            'ARROWLEFT': 'ArrowLeft',
+            'ARROWRIGHT': 'ArrowRight',
+            'CTRL': 'Control',
+            'ALT': 'Alt',
+            'SHIFT': 'Shift',
+            'META': 'Meta',
+          };
+          const mappedKey = keyMap[key.toUpperCase()] || key;
+          await page.keyboard.press(mappedKey, { delay: 50 + Math.random() * 50 });
+        }
+        break;
+      }
+      
+      case 'type': {
+        const { text = '' } = action;
+        // Type with human-like delays between characters
+        await page.keyboard.type(text, { delay: 50 + Math.random() * 100 });
+        break;
+      }
+      
+      case 'wait': {
+        await page.waitForTimeout(2000);
+        break;
+      }
+      
+      case 'screenshot': {
+        // Screenshot is taken at each turn anyway
+        break;
+      }
+      
+      case 'drag': {
+        const { startX = 0, startY = 0, endX = 0, endY = 0 } = action;
+        await page.mouse.move(startX, startY, { steps: 10 });
+        await page.mouse.down();
+        await page.mouse.move(endX, endY, { steps: 10 });
+        await page.mouse.up();
+        break;
+      }
+      
+      default:
+        console.log(`[CUA] Unknown action type: ${(action as ComputerAction).type}`);
     }
     
-    case 'type': {
-      const { text = '' } = action;
-      await page.keyboard.type(text);
-      break;
+    // Wait for action to take effect and any network activity
+    await page.waitForTimeout(200 + Math.random() * 400);
+    
+    // Wait for network to settle after actions that might trigger requests
+    if (action.type === 'click') {
+      try {
+        await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => {});
+      } catch (e) {
+        // Ignore timeout - page might not have network activity
+      }
     }
     
-    case 'wait': {
-      await page.waitForTimeout(2000);
-      break;
-    }
-    
-    case 'screenshot': {
-      // Screenshot is taken at each turn anyway
-      break;
-    }
-    
-    case 'drag': {
-      const { startX = 0, startY = 0, endX = 0, endY = 0 } = action;
-      await page.mouse.move(startX, startY);
-      await page.mouse.down();
-      await page.mouse.move(endX, endY);
-      await page.mouse.up();
-      break;
-    }
-    
-    default:
-      console.log(`[CUA] Unknown action type: ${(action as ComputerAction).type}`);
+  } catch (error) {
+    console.error(`[CUA] Error executing action ${action.type}:`, error);
+    // Don't throw - continue with next action
   }
-  
-  // Wait a bit for the action to take effect
-  await page.waitForTimeout(500);
 }
 
 /**
@@ -272,29 +293,111 @@ async function runComputerUseLoop(
   
   console.log('[CUA] Starting browser...');
   
-  // Launch browser with safety settings
+  // Launch browser with safety and stealth settings
   const browser = await chromium.launch({
     headless: false, // Set to true for production, false to watch it work
-    args: ['--disable-extensions', '--disable-file-system'],
+    args: [
+      '--disable-extensions',
+      '--disable-file-system',
+      '--disable-blink-features=AutomationControlled', // Hide automation
+      '--disable-dev-shm-usage',
+      '--no-sandbox',
+    ],
   });
   
   const context = await browser.newContext({
     viewport: { width: DISPLAY_WIDTH, height: DISPLAY_HEIGHT },
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    locale: 'en-US',
+    timezoneId: 'America/New_York',
+    // Add stealth properties
+    extraHTTPHeaders: {
+      'Accept-Language': 'en-US,en;q=0.9',
+    },
   });
   
   const page = await context.newPage();
+  
+  // Suppress console errors (CSP violations, etc.) - they're just noise
+  page.on('console', (msg) => {
+    const text = msg.text();
+    // Only log important messages, ignore CSP and third-party errors
+    if (!text.includes('Content Security Policy') && 
+        !text.includes('facebook.com') &&
+        !text.includes('CSP directive') &&
+        !text.includes('Drupal.AjaxError')) {
+      console.log(`[Browser Console] ${msg.type()}: ${text}`);
+    }
+  });
+  
+  // Block unnecessary third-party requests that cause CSP errors
+  //IVAN: Does this actually work?
+  await page.route('**/*', (route) => {
+    const url = route.request().url();
+    
+    // Block Facebook, analytics, and other third-party trackers
+    if (
+      url.includes('facebook.com') ||
+      url.includes('doubleclick.net') ||
+      url.includes('google-analytics.com') ||
+      url.includes('googletagmanager.com') ||
+      url.includes('linkedin.com') ||
+      url.includes('crazyegg.com') ||
+      url.includes('qualtrics.com') ||
+      url.includes('appdynamics.com') ||
+      url.includes('cookielaw.org') ||
+      url.includes('fbevents.js') ||
+      url.includes('adrum')
+    ) {
+      route.abort();
+    } else {
+      route.continue();
+    }
+  });
+  
+  // Add stealth script to hide automation
+  await page.addInitScript(() => {
+    // Override webdriver property
+    Object.defineProperty(navigator, 'webdriver', {
+      get: () => false,
+    });
+    
+    // Override plugins
+    Object.defineProperty(navigator, 'plugins', {
+      get: () => [1, 2, 3, 4, 5],
+    });
+    
+    // Override languages
+    Object.defineProperty(navigator, 'languages', {
+      get: () => ['en-US', 'en'],
+    });
+    
+    // Override permissions
+    const originalQuery = window.navigator.permissions.query;
+    window.navigator.permissions.query = (parameters: any) => (
+      parameters.name === 'notifications' ?
+        Promise.resolve({ state: Notification.permission } as PermissionStatus) :
+        originalQuery(parameters)
+    );
+  });
   
   try {
     // Navigate to Transamerica quote page
     console.log('[CUA] Navigating to Transamerica...');
     await page.goto('https://www.transamerica.com/lifepolicyexplorer/get-quote', {
-      waitUntil: 'networkidle',
+      waitUntil: 'domcontentloaded', // Changed from 'networkidle' to avoid waiting for blocked requests
       timeout: 60000,
     });
     
-    // Wait for page to fully load
-    await page.waitForTimeout(3000);
+    // Wait for page to fully load and form to be ready
+    await page.waitForTimeout(2000);
+    
+    // Wait for any form elements to appear
+    try {
+      await page.waitForSelector('input, select, button', { timeout: 10000 });
+    } catch (e) {
+      console.log('[CUA] Form elements may not be visible yet, continuing...');
+    }
     
     // Capture initial screenshot
     const initialScreenshot = await captureScreenshot(page);
@@ -308,33 +411,42 @@ async function runComputerUseLoop(
     const taskInstructions = `
 You are automating a life insurance quote on the Transamerica website. The page is already loaded.
 
+IGNORE ANY CONSOLE ERRORS - they are from third-party scripts and won't affect the form.
+
 FILL OUT THE FORM WITH THIS EXACT INFORMATION:
-- Coverage Amount: $${formData.coverageAmount.toLocaleString()}
+- Coverage Amount: $${formData.coverageAmount.toLocaleString()} (or ${formData.coverageAmount} without commas)
 - Term Length: ${formData.yearsCovered} years
 - Payment Frequency: ${formData.paymentFrequency}
 - ZIP Code: ${formData.zipCode}
 - State: ${formData.state}
-- Date of Birth: ${dobFormatted}
+- Date of Birth: ${dobFormatted} (format: MM/DD/YYYY)
 - Gender: ${formData.gender}
-- Height: ${heightFormatted} (${formData.heightFeet} feet, ${formData.heightInches} inches)
-- Weight: ${formData.weightLbs} lbs
+- Height: ${heightFormatted} OR ${formData.heightFeet} feet ${formData.heightInches} inches
+- Weight: ${formData.weightLbs} lbs (or just ${formData.weightLbs})
 - Driving Record: ${formData.drivingRecord}
 - Health Status: ${formData.healthStatus}
 - Nicotine/Tobacco Use: ${formData.nicotineUse}
 
-INSTRUCTIONS:
-1. Look at the current page and identify the form fields
-2. Fill in each field with the exact values provided above
-3. Click dropdown menus and select the correct options
-4. Click "Next", "Continue", or "Get Quote" buttons to proceed through the form
-5. Continue until you see the final premium/quote result
-6. Once you see the estimated premium amount displayed, respond with ONLY the text: PREMIUM_FOUND: $XX.XX (replacing XX.XX with the actual amount)
+STEP-BY-STEP INSTRUCTIONS:
+1. Examine the current page screenshot carefully
+2. Look for input fields, dropdowns, and buttons
+3. Fill in fields one at a time:
+   - Click on each input field first
+   - Type or select the value from the list above
+   - Wait for the field to update before moving to the next
+4. For dropdowns: Click to open, then click the option that matches
+5. After filling all visible fields, look for and click "Next", "Continue", "Submit", or "Get Quote" buttons
+6. Repeat steps 1-5 for each subsequent page
+7. Continue until you see a page showing "Estimated Premium", "Monthly Premium", or similar text with a dollar amount
+8. Once you see the premium amount (e.g., "$23.45" or "$23.45/month"), respond with: PREMIUM_FOUND: $XX.XX
 
-IMPORTANT:
-- Fill fields one at a time
-- Wait for dropdowns to open before selecting
-- If a field doesn't match exactly, use the closest option
-- The goal is to reach the final quote showing the estimated premium
+IMPORTANT NOTES:
+- Ignore any error messages in the browser console - they won't stop the form
+- If a field label doesn't match exactly, look for similar wording
+- Some fields might be on different pages - navigate through all pages
+- The premium might be labeled as "Monthly Premium", "Estimated Premium", or just show a dollar amount
+- Be patient - wait for pages to load before taking actions
+- If you get stuck, try scrolling down to see if there are more fields or buttons
 `.trim();
 
     console.log('[CUA] Sending initial request to OpenAI...');
@@ -396,10 +508,17 @@ IMPORTANT:
           for (const content of item.content) {
             if (content.type === 'output_text' && content.text) {
               console.log('[CUA] Model text:', content.text);
-              const premiumMatch = content.text.match(/PREMIUM_FOUND:\s*\$?([\d,]+\.?\d*)/i);
+              
+              // Look for explicit premium found message
+              let premiumMatch = content.text.match(/PREMIUM_FOUND:\s*\$?([\d,]+\.?\d*)/i);
+              if (!premiumMatch) {
+                // Also check for just dollar amounts that might be the premium
+                premiumMatch = content.text.match(/\$([\d,]+\.?\d{2})/);
+              }
+              
               if (premiumMatch) {
-                premiumFound = premiumMatch[1];
-                console.log(`[CUA] Premium found: $${premiumFound}`);
+                premiumFound = premiumMatch[1].replace(/,/g, '');
+                console.log(`[CUA] Premium found in model output: $${premiumFound}`);
               }
             }
           }
@@ -418,14 +537,40 @@ IMPORTANT:
       if (!computerCall) {
         console.log('[CUA] No computer_call found, checking for final output...');
         
-        // Try to extract premium from page directly
+        // Try to extract premium from page directly using multiple strategies
+        const pageText = await page.evaluate(() => document.body.innerText);
         const pageContent = await page.content();
-        const premiumRegex = /(?:estimated\s+)?premium[:\s]*\$?([\d,]+\.?\d*)/i;
-        const match = pageContent.match(premiumRegex);
-        if (match) {
-          premiumFound = match[1].replace(/,/g, '');
-          console.log(`[CUA] Premium extracted from page: $${premiumFound}`);
+        
+        // Strategy 1: Look for common premium patterns in text
+        const premiumPatterns = [
+          /(?:estimated\s+)?(?:monthly\s+)?premium[:\s]*\$?([\d,]+\.?\d{2})/i,
+          /\$([\d,]+\.?\d{2})\s*(?:per\s+month|monthly|premium)/i,
+          /premium[:\s]*\$([\d,]+\.?\d{2})/i,
+        ];
+        
+        for (const pattern of premiumPatterns) {
+          const match = pageText.match(pattern) || pageContent.match(pattern);
+          if (match) {
+            premiumFound = match[1].replace(/,/g, '');
+            console.log(`[CUA] Premium extracted from page (pattern: ${pattern}): $${premiumFound}`);
+            break;
+          }
         }
+        
+        // Strategy 2: Look for large dollar amounts that might be premiums
+        if (!premiumFound) {
+          const dollarAmounts = pageText.match(/\$([\d,]+\.\d{2})/g) || [];
+          // Filter for reasonable premium amounts (between $5 and $5000)
+          for (const amount of dollarAmounts) {
+            const value = parseFloat(amount.replace(/[$,]/g, ''));
+            if (value >= 5 && value <= 5000) {
+              premiumFound = value.toFixed(2);
+              console.log(`[CUA] Premium extracted (reasonable amount): $${premiumFound}`);
+              break;
+            }
+          }
+        }
+        
         break;
       }
       
