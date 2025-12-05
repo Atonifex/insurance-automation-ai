@@ -452,47 +452,6 @@ async function runComputerUseLoop(
     }
   });
   
-  // Intercept and enhance AJAX requests with proper headers
-  await page.route('**/*', async (route) => {
-    const request = route.request();
-    const url = request.url();
-    
-    // Block Facebook, analytics, and other third-party trackers
-    if (
-      url.includes('facebook.com') ||
-      url.includes('doubleclick.net') ||
-      url.includes('google-analytics.com') ||
-      url.includes('googletagmanager.com') ||
-      url.includes('linkedin.com') ||
-      url.includes('crazyegg.com') ||
-      url.includes('qualtrics.com') ||
-      url.includes('appdynamics.com') ||
-      url.includes('cookielaw.org') ||
-      url.includes('fbevents.js') ||
-      url.includes('adrum')
-    ) {
-      route.abort();
-      return;
-    }
-    
-    // For AJAX requests to the quote form, ensure proper headers
-    if (url.includes('ajax_form=1') || url.includes('drupal_ajax')) {
-      const headers = {
-        ...request.headers(),
-        'X-Requested-With': 'XMLHttpRequest',
-        'Accept': 'application/json, text/javascript, */*; q=0.01',
-        'Referer': 'https://www.transamerica.com/lifepolicyexplorer/get-quote',
-      };
-      
-      // Continue with enhanced headers
-      await route.continue({ headers });
-      return;
-    }
-    
-    // For all other requests, continue normally
-    route.continue();
-  });
-  
   // Add stealth script and AJAX monitoring
   await page.addInitScript(() => {
     // Override webdriver property
