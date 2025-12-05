@@ -258,9 +258,25 @@ async function executeAction(page: import('playwright').Page, action: ComputerAc
     // Wait for action to take effect and any network activity
     await page.waitForTimeout(200 + Math.random() * 400);
     
-    // Wait for network to settle after actions that might trigger requests
-    if (action.type === 'click') {
+    // Wait for AJAX to complete after actions that might trigger requests
+    if (action.type === 'click' || action.type === 'type') {
       try {
+        // Wait for AJAX requests to complete (Drupal forms use AJAX)
+        await page.waitForFunction(
+          () => {
+            // Check if jQuery AJAX is active (Drupal uses jQuery)
+            if (typeof (window as any).jQuery !== 'undefined') {
+              return (window as any).jQuery.active === 0;
+            }
+            return true;
+          },
+          { timeout: 5000 }
+        ).catch(() => {
+          // If jQuery check fails, just wait a bit
+          console.log('[CUA] Waiting for AJAX to settle...');
+        });
+        
+        // Also wait for network to be idle
         await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => {});
       } catch (e) {
         // Ignore timeout - page might not have network activity
@@ -330,10 +346,102 @@ async function runComputerUseLoop(
     }
   });
   
-  // Block unnecessary third-party requests that cause CSP errors
-  //IVAN: Does this actually work?
-  await page.route('**/*', (route) => {
-    const url = route.request().url();
+  // Track AJAX requests and understand what triggers them
+  const ajaxRequests: Array<{ url: string; status: number; method: string; triggeredBy?: string }> = [];
+  
+  // Monitor what triggers AJAX calls
+  await page.addInitScript(() => {
+    // Intercept XMLHttpRequest
+    const originalOpen = XMLHttpRequest.prototype.open;
+    const originalSend = XMLHttpRequest.prototype.send;
+    
+    XMLHttpRequest.prototype.open = function(method: string, url: string, async?: boolean, username?: string | null, password?: string | null) {
+      (this as any)._method = method;
+      (this as any)._url = url;
+      return originalOpen.call(this, method, url, async ?? true, username, password);
+    };
+    
+    XMLHttpRequest.prototype.send = function(data?: any) {
+      const url = (this as any)._url;
+      const method = (this as any)._method;
+      
+      if (url && (url.includes('ajax_form') || url.includes('drupal_ajax'))) {
+        // Get stack trace to see what triggered it
+        const stack = new Error().stack;
+        const caller = stack?.split('\n')[2]?.trim() || 'unknown';
+        
+        console.log(`[AJAX Trigger] ${method} ${url}`);
+        console.log(`[AJAX Trigger] Called from: ${caller}`);
+        console.log(`[AJAX Trigger] Data:`, data);
+        
+        // Store in window for later retrieval
+        (window as any).__lastAjaxTrigger = {
+          url,
+          method,
+          caller,
+          data,
+          timestamp: Date.now(),
+        };
+      }
+      
+      return originalSend.apply(this, [data]);
+    };
+    
+    // Also intercept fetch
+    const originalFetch = window.fetch;
+    window.fetch = function(input: RequestInfo | URL, init?: RequestInit) {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('ajax_form') || url.includes('drupal_ajax')) {
+        const stack = new Error().stack;
+        const caller = stack?.split('\n')[2]?.trim() || 'unknown';
+        console.log(`[Fetch AJAX] ${init?.method || 'GET'} ${url}`);
+        console.log(`[Fetch AJAX] Called from: ${caller}`);
+      }
+      return originalFetch.apply(this, [input, init]);
+    };
+  });
+  
+  // Track responses
+  page.on('response', (response) => {
+    const url = response.url();
+    const request = response.request();
+    
+    // Track AJAX requests to the quote form
+    if (url.includes('ajax_form=1') || url.includes('drupal_ajax')) {
+      // Try to get what triggered it
+      const triggerInfo = page.evaluate(() => {
+        return (window as any).__lastAjaxTrigger || null;
+      }).catch(() => null);
+      
+      ajaxRequests.push({ 
+        url, 
+        status: response.status(),
+        method: request.method(),
+      });
+      
+      if (response.status() === 403) {
+        console.log(`[CUA] ⚠️ AJAX 403 error: ${request.method()} ${url}`);
+        console.log(`[CUA] Request headers:`, request.headers());
+      } else if (response.status() === 200) {
+        console.log(`[CUA] ✅ AJAX success: ${request.method()} ${url}`);
+      }
+    }
+  });
+  
+  // Also track requests to see what's being sent
+  page.on('request', (request) => {
+    const url = request.url();
+    if (url.includes('ajax_form=1') || url.includes('drupal_ajax')) {
+      console.log(`[CUA] 📤 AJAX Request: ${request.method()} ${url}`);
+      console.log(`[CUA] 📤 Headers:`, request.headers());
+      console.log(`[CUA] 📤 Post Data:`, request.postData());
+    }
+  });
+  
+  // Intercept and enhance AJAX requests with proper headers
+  await page.route('**/*', async (route) => {
+    const request = route.request();
+    const url = request.url();
     
     // Block Facebook, analytics, and other third-party trackers
     if (
@@ -350,12 +458,28 @@ async function runComputerUseLoop(
       url.includes('adrum')
     ) {
       route.abort();
-    } else {
-      route.continue();
+      return;
     }
+    
+    // For AJAX requests to the quote form, ensure proper headers
+    if (url.includes('ajax_form=1') || url.includes('drupal_ajax')) {
+      const headers = {
+        ...request.headers(),
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json, text/javascript, */*; q=0.01',
+        'Referer': 'https://www.transamerica.com/lifepolicyexplorer/get-quote',
+      };
+      
+      // Continue with enhanced headers
+      await route.continue({ headers });
+      return;
+    }
+    
+    // For all other requests, continue normally
+    route.continue();
   });
   
-  // Add stealth script to hide automation
+  // Add stealth script and AJAX monitoring
   await page.addInitScript(() => {
     // Override webdriver property
     Object.defineProperty(navigator, 'webdriver', {
@@ -379,6 +503,22 @@ async function runComputerUseLoop(
         Promise.resolve({ state: Notification.permission } as PermissionStatus) :
         originalQuery(parameters)
     );
+    
+    // Monitor DOM events that might trigger AJAX
+    const eventsToMonitor = ['change', 'input', 'blur', 'click', 'submit'];
+    eventsToMonitor.forEach(eventType => {
+      document.addEventListener(eventType, (e) => {
+        const target = e.target as HTMLElement;
+        if (target && (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'BUTTON' || target.tagName === 'FORM')) {
+          console.log(`[DOM Event] ${eventType} on ${target.tagName}${target.id ? '#' + target.id : ''}${target.className ? '.' + target.className.split(' ')[0] : ''}`);
+          (window as any).__lastDomEvent = {
+            type: eventType,
+            target: target.tagName + (target.id ? '#' + target.id : ''),
+            timestamp: Date.now(),
+          };
+        }
+      }, true); // Use capture phase
+    });
   });
   
   try {
@@ -397,6 +537,26 @@ async function runComputerUseLoop(
       await page.waitForSelector('input, select, button', { timeout: 10000 });
     } catch (e) {
       console.log('[CUA] Form elements may not be visible yet, continuing...');
+    }
+    
+    // Extract CSRF tokens from the form (Drupal uses form_build_id and form_token)
+    const formTokens = await page.evaluate(() => {
+      const form = document.querySelector('form');
+      if (!form) return null;
+      
+      const formBuildId = form.querySelector('input[name="form_build_id"]') as HTMLInputElement;
+      const formToken = form.querySelector('input[name="form_token"]') as HTMLInputElement;
+      const formId = form.querySelector('input[name="form_id"]') as HTMLInputElement;
+      
+      return {
+        formBuildId: formBuildId?.value || null,
+        formToken: formToken?.value || null,
+        formId: formId?.value || null,
+      };
+    });
+    
+    if (formTokens) {
+      console.log('[CUA] Extracted form tokens:', formTokens);
     }
     
     // Capture initial screenshot
