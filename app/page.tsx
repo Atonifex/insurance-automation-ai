@@ -486,7 +486,7 @@ export default function Home() {
                     onChange={handleChange}
                     className="w-full rounded-lg border border-slate-600 bg-slate-900/50 px-3 py-2.5 text-white transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                   >
-                    {(['Never', 'Currently', 'None for 1yr', 'None for 2yrs', 'None for 3+ yrs'] as NicotineUse[]).map(use => (
+                    {(['Never', 'Currently', 'None for 1 Year', 'None for 2 Years', 'None for 3+ Years'] as NicotineUse[]).map(use => (
                       <option key={use} value={use}>{use}</option>
                     ))}
                   </select>

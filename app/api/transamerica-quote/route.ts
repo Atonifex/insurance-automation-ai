@@ -19,7 +19,7 @@ import {
  */
 
 // Type guard for nicotine use values
-const VALID_NICOTINE_VALUES = ['Never', 'Currently', 'None for 1yr', 'None for 2yrs', 'None for 3+ yrs'];
+const VALID_NICOTINE_VALUES = ['Never', 'Currently', 'None for 1 Year', 'None for 2 Years', 'None for 3+ Years'];
 const VALID_FREQUENCIES = ['Monthly', 'Quarterly', 'Semi-Annual', 'Annual'];
 const VALID_YEARS = [10, 20, 30];
 const VALID_GENDERS = ['Male', 'Female'];
