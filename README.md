@@ -1,56 +1,82 @@
 # Life Insurance Quote Automation
 
-AI-powered browser automation for getting instant Transamerica life insurance quotes.
+**Real** AI-powered browser automation using OpenAI Computer Use (CUA) to get Transamerica life insurance quotes.
 
-## 🚀 Features
+## 🎯 How It Works
 
-- **Clean Form Interface**: Professional UI for collecting all required quote information
-- **Real-time Validation**: Client-side validation with helpful error messages
-- **AI Automation**: Uses OpenAI Computer Use or Playwright for browser automation
-- **Demo Mode**: Works without API key using simulated premium calculations
-- **Responsive Design**: Works on desktop and mobile devices
+This is **NOT a simulation** - it actually automates a browser:
+
+1. You submit client information through the web form
+2. The API launches a real Chromium browser via Playwright
+3. OpenAI's Computer Use model receives screenshots and decides what to click/type
+4. The browser fills out the Transamerica quote form step by step
+5. The final premium is extracted and returned to you
+
+```
+┌─────────────┐     ┌──────────────┐     ┌─────────────┐     ┌──────────────┐
+│  Frontend   │────▶│   Next.js    │────▶│  Playwright │────▶│ Transamerica │
+│   Form      │     │     API      │     │   Browser   │     │   Website    │
+└─────────────┘     └──────────────┘     └─────────────┘     └──────────────┘
+                           │                    │
+                           │   Screenshots      │
+                           ▼                    │
+                    ┌──────────────┐            │
+                    │   OpenAI     │◀───────────┘
+                    │ Computer Use │
+                    │    (CUA)     │
+                    └──────────────┘
+```
 
 ## 📋 Prerequisites
 
-- Node.js 18+ 
-- npm or yarn
-- OpenAI API key (optional - runs in demo mode without it)
+- **Node.js 18+**
+- **OpenAI API Key** with access to `computer-use-preview` model
+- **Playwright** with browsers installed
+- **Local environment** (NOT Vercel/serverless - needs real browser)
 
 ## 🛠️ Installation
 
-1. **Clone and navigate to the project:**
-   ```bash
-   cd insurance-application-ai
-   ```
+### 1. Clone and install dependencies
 
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
+```bash
+cd insurance-application-ai
+npm install
+```
 
-3. **Install Playwright browsers (for production automation):**
-   ```bash
-   npx playwright install chromium
-   ```
+### 2. Install Playwright browsers
 
-4. **Create environment file:**
-   Create a `.env.local` file in the root directory:
-   ```env
-   # OpenAI API Key for Computer Use automation
-   # Get your key from: https://platform.openai.com/api-keys
-   OPENAI_API_KEY=your-api-key-here
-   
-   # Optional: Set to 'production' in deployment
-   NODE_ENV=development
-   ```
+```bash
+npx playwright install chromium
+```
 
-5. **Run the development server:**
-   ```bash
-   npm run dev
-   ```
+### 3. Create `.env.local` file
 
-6. **Open in browser:**
-   Navigate to [http://localhost:3000](http://localhost:3000)
+Create a file named `.env.local` in the `insurance-application-ai` folder:
+
+```env
+OPENAI_API_KEY=sk-your-api-key-here
+```
+
+> ⚠️ **Important**: You need an OpenAI API key with access to the `computer-use-preview` model.
+
+### 4. Start the development server
+
+```bash
+npm run dev
+```
+
+### 5. Open in browser
+
+Navigate to **http://localhost:3000**
+
+## 🚀 Usage
+
+1. Fill out all 12 fields in the form
+2. Click "Get Quote"
+3. **Watch the automation happen** - a browser window will open and you'll see it filling out the Transamerica form in real-time
+4. Wait for the premium to be extracted and displayed
+
+> **Note**: The browser opens in **visible mode** by default so you can watch it work. Change `headless: false` to `headless: true` in route.ts for production.
 
 ## 📁 Project Structure
 
@@ -59,101 +85,122 @@ insurance-application-ai/
 ├── app/
 │   ├── api/
 │   │   └── transamerica-quote/
-│   │       └── route.ts      # API endpoint for quote automation
-│   ├── globals.css           # Global styles with Tailwind
-│   ├── layout.tsx            # Root layout with metadata
-│   ├── page.tsx              # Landing page with quote form
-│   └── types.ts              # TypeScript type definitions
-├── .env.local                # Environment variables (create this)
+│   │       └── route.ts      # OpenAI CUA + Playwright automation
+│   ├── globals.css           # Tailwind styles
+│   ├── layout.tsx            # Root layout
+│   ├── page.tsx              # Quote form UI
+│   └── types.ts              # TypeScript interfaces
+├── .env.local                # Your OpenAI API key (create this!)
 ├── package.json
 └── README.md
 ```
 
-## 🎯 How It Works
+## 🔄 The Computer Use Loop
 
-### Frontend Flow
-1. Insurance agent fills out the 12-field quote form
-2. Client-side validation ensures all data is correct
-3. Form submits to `/api/transamerica-quote` endpoint
-4. Loading state displays while automation runs
-5. Quote result appears below the form
+The API implements the full CUA loop as specified by OpenAI:
 
-### Backend Flow
-1. API route validates incoming form data
-2. If `OPENAI_API_KEY` is set:
-   - Attempts OpenAI Computer Use automation
-   - Falls back to Playwright automation if needed
-3. If no API key (demo mode):
-   - Returns simulated premium based on input factors
-4. Response includes formatted premium and quote details
+```typescript
+// Simplified flow
+while (taskNotComplete) {
+  // 1. Receive action from OpenAI (click, type, scroll, etc.)
+  const action = await getActionFromOpenAI(screenshot);
+  
+  // 2. Execute action in Playwright browser
+  await executeAction(page, action);
+  
+  // 3. Capture new screenshot
+  const screenshot = await page.screenshot();
+  
+  // 4. Send screenshot back to OpenAI
+  await sendScreenshotToOpenAI(screenshot);
+}
+```
 
-### Form Fields
+## 📝 Form Fields
 
 | Field | Type | Description |
 |-------|------|-------------|
-| Coverage Amount | Number | USD coverage (min $25,000) |
+| Coverage Amount | Number | $25,000 - $10,000,000 |
 | Term Length | Select | 10, 20, or 30 years |
 | Payment Frequency | Select | Monthly, Quarterly, Semi-Annual, Annual |
 | ZIP Code | Text | 5-digit US ZIP code |
 | State | Select | US state abbreviation |
-| Date of Birth | Date | Applicant's birth date |
+| Date of Birth | Date | Applicant's birth date (18-80 years old) |
 | Gender | Select | Male or Female |
-| Weight | Number | Weight in pounds |
-| Height (feet) | Number | Height feet component |
-| Height (inches) | Number | Height inches component (0-11) |
+| Weight | Number | 50-500 lbs |
+| Height (feet) | Number | 3-7 feet |
+| Height (inches) | Number | 0-11 inches |
 | Driving Record | Select | Excellent, Good, or Fair |
 | Health Status | Select | Excellent, Good, or Fair |
-| Nicotine Use | Select | Usage history options |
+| Nicotine Use | Select | Never, Currently, or quit timeframe |
 
-## 🔒 Security Notes
+## 🔧 Configuration
 
-- Never commit `.env.local` to version control
-- API keys are only used server-side
-- Sensitive data is not logged in production
-- Form validation prevents malicious input
+### Browser Settings (route.ts)
 
-## 🚀 Deployment
+```typescript
+// Viewport must match what you tell OpenAI
+const DISPLAY_WIDTH = 1024;
+const DISPLAY_HEIGHT = 768;
 
-### Vercel Deployment
+// Prevent infinite loops
+const MAX_ITERATIONS = 50;
 
-1. Push code to GitHub repository
-2. Import project in [Vercel Dashboard](https://vercel.com)
-3. Add environment variable:
-   - `OPENAI_API_KEY`: Your OpenAI API key
-4. Deploy
+// Browser visibility (false = watch it work)
+headless: false
+```
 
-### Environment Variables
+## ⚠️ Important Notes
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `OPENAI_API_KEY` | No | Enables AI automation (demo mode without) |
-| `NODE_ENV` | No | Set to `production` for deployment |
+### This won't work on Vercel/Serverless
 
-## 🧪 Testing
+Serverless platforms can't run browsers. You must run this locally or on a server with:
+- Full Node.js runtime
+- Playwright browsers installed
+- Sufficient memory/CPU for browser automation
 
-### Demo Mode
-Without an API key, the app runs in demo mode:
-- Form submission works normally
-- Backend calculates simulated premium based on:
-  - Coverage amount
-  - Age (from date of birth)
-  - Health status
-  - Nicotine use
-  - Term length
-  - Gender
+### OpenAI Costs
 
-### Production Mode
-With a valid API key:
-- Attempts real browser automation
-- Navigates Transamerica quote page
-- Fills form with provided data
-- Extracts actual premium
+Computer Use makes multiple API calls per quote (typically 10-30 iterations). Each iteration sends a screenshot. Monitor your usage.
 
-## 📝 API Reference
+### Safety Checks
+
+OpenAI may return safety warnings for certain actions. The current implementation auto-acknowledges them for the demo. In production, you should review these.
+
+### Transamerica Website Changes
+
+If Transamerica updates their website, the automation may need adjustment. The CUA model adapts to UI changes, but major redesigns could cause issues.
+
+## 🐛 Troubleshooting
+
+### "Playwright browsers not installed"
+```bash
+npx playwright install chromium
+```
+
+### "OpenAI API key not configured"
+Create `.env.local` with your key:
+```env
+OPENAI_API_KEY=sk-your-key-here
+```
+
+### "Could not extract premium"
+- The website may have changed
+- The form might require additional steps
+- Check the browser window to see where it got stuck
+- Increase `MAX_ITERATIONS` if needed
+
+### Browser not opening
+Check that Playwright is installed:
+```bash
+npx playwright install
+```
+
+## 📄 API Reference
 
 ### POST /api/transamerica-quote
 
-**Request Body:**
+**Request:**
 ```json
 {
   "coverageAmount": 250000,
@@ -176,8 +223,8 @@ With a valid API key:
 ```json
 {
   "success": true,
-  "premium": "$13.18",
-  "premiumRaw": 13.18,
+  "premium": "$23.45",
+  "premiumRaw": 23.45,
   "frequency": "Monthly",
   "coverageAmount": 250000,
   "yearsCovered": 20
@@ -188,43 +235,22 @@ With a valid API key:
 ```json
 {
   "success": false,
-  "error": "Validation failed",
-  "details": "ZIP code must be exactly 5 digits"
+  "error": "Automation failed",
+  "details": "Could not find premium after 50 iterations"
 }
 ```
 
 ### GET /api/transamerica-quote
 
-Returns API information and status.
+Returns API status and configuration info.
 
-## 🛠️ Development
+## 🔐 Security
 
-```bash
-# Install dependencies
-npm install
+- Never commit `.env.local`
+- The browser runs with limited permissions
+- Consider running in a VM/container for extra isolation
+- OpenAI's safety checks help prevent malicious actions
 
-# Run development server
-npm run dev
+## 📜 License
 
-# Build for production
-npm run build
-
-# Start production server
-npm start
-
-# Run linting
-npm run lint
-```
-
-## 📄 License
-
-MIT License - Feel free to use this prototype for your insurance automation needs.
-
-## 🤝 Contributing
-
-This is a demo prototype. For production use:
-1. Add comprehensive error handling
-2. Implement rate limiting
-3. Add logging and monitoring
-4. Consider queueing for long-running automation
-5. Add authentication for the API endpoint
+MIT - Use at your own risk. This is a prototype demonstrating OpenAI Computer Use capabilities.
