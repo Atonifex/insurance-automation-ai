@@ -20,9 +20,9 @@ import {
  */
 const initialFormData: TransamericaQuoteFormData = {
   coverageAmount: 250000,
-  zipCode: '',
+  zipCode: '29617',
   state: 'SC',
-  dateOfBirth: '',
+  dateOfBirth: '1985-06-15',
   gender: 'Male',
   weightLbs: 170,
   heightFeet: 5,
@@ -65,8 +65,12 @@ export default function Home() {
       setErrors(prev => ({ ...prev, [name]: undefined }));
     }
 
-    // Convert numeric inputs to numbers, keep others as strings
-    const processedValue = type === 'number' ? Number(value) : value;
+    // Convert numeric inputs to numbers
+    // Also convert select values for numeric fields (yearsCovered, heightFeet, heightInches, weightLbs, coverageAmount)
+    const numericFields = ['yearsCovered', 'heightFeet', 'heightInches', 'weightLbs', 'coverageAmount'];
+    const processedValue = (type === 'number' || numericFields.includes(name)) 
+      ? Number(value) 
+      : value;
     
     setFormData(prev => ({
       ...prev,

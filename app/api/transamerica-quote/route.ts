@@ -31,8 +31,8 @@ const VALID_GENDERS = ['Male', 'Female'];
 const VALID_RECORDS = ['Excellent', 'Good', 'Fair'];
 
 // Browser viewport dimensions - must match what we tell OpenAI
-const DISPLAY_WIDTH = 1024;
-const DISPLAY_HEIGHT = 768;
+const DISPLAY_WIDTH = 1920;
+const DISPLAY_HEIGHT = 1080;
 
 // Maximum iterations to prevent infinite loops
 const MAX_ITERATIONS = 50;
@@ -107,8 +107,22 @@ function validateFormData(data: unknown): string[] {
     errors.push('Invalid payment frequency selected');
   }
   
-  if (typeof form.yearsCovered !== 'number' || !VALID_YEARS.includes(form.yearsCovered)) {
+  // Years covered validation - handle both string and number (select elements send strings)
+  let yearsCovered: number;
+  if (typeof form.yearsCovered === 'string') {
+    yearsCovered = parseInt(form.yearsCovered, 10);
+  } else if (typeof form.yearsCovered === 'number') {
+    yearsCovered = form.yearsCovered;
+  } else {
     errors.push('Years covered must be 10, 20, or 30');
+    return errors;
+  }
+  
+  if (isNaN(yearsCovered) || !VALID_YEARS.includes(yearsCovered as typeof VALID_YEARS[number])) {
+    errors.push('Years covered must be 10, 20, or 30');
+  } else {
+    // Normalize to number type for downstream processing
+    (form as any).yearsCovered = yearsCovered;
   }
   
   return errors;

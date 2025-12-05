@@ -139,9 +139,9 @@ while (taskNotComplete) {
 ### Browser Settings (route.ts)
 
 ```typescript
-// Viewport must match what you tell OpenAI
-const DISPLAY_WIDTH = 1024;
-const DISPLAY_HEIGHT = 768;
+// Viewport must match what you tell OpenAI. The original documentation example is 1024 x 768, but I'll try larger (1920 x 1080)
+const DISPLAY_WIDTH = 1920;
+const DISPLAY_HEIGHT = 1080;
 
 // Prevent infinite loops
 const MAX_ITERATIONS = 50;
